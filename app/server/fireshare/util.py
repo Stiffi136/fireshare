@@ -819,7 +819,7 @@ def tonemap_filter(operator, assume_pq=False):
         vf = (f"{prefix}format=yuv420p10le,hwupload,"
               "libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p,"
               "hwdownload,format=yuv420p")
-        return ['-init_hw_device', 'vulkan=vk', '-filter_hw_device', 'vk'], vf
+        return vulkan_device_args(), vf
     # PQ/HLG to linear light with 100 nits at 1.0, float RGB in BT.709 primaries, the
     # curve, then back to BT.709 gamma. desat=0 keeps bright colours from greying out.
     vf = (f"{prefix}zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
@@ -829,7 +829,10 @@ def tonemap_filter(operator, assume_pq=False):
 
 
 _ffmpeg_filters_cache = None
-_vulkan_device_cache = ('unchecked', None)
+# ('checked', kind, name, index) once probed: kind is 'hardware', 'software' or None,
+# index the loader-order device to pass to ffmpeg when the GPU is not the first one.
+_vulkan_device_cache = ('unchecked', None, None, None)
+_VULKAN_ICD_DIRS = ('/etc/vulkan/icd.d', '/usr/share/vulkan/icd.d')
 
 
 def ffmpeg_filters():
@@ -850,29 +853,74 @@ def ffmpeg_filters():
     return _ffmpeg_filters_cache
 
 
+def _is_software_vulkan(name):
+    return any(m in name.lower() for m in _SOFTWARE_VULKAN_DEVICES)
+
+
+def _probe_vulkan(index=None):
+    """Bring up Vulkan device `index` (loader order; None for the loader's first) in
+    ffmpeg. Returns (device name or None, loader error lines)."""
+    device = f'vulkan=vk:{index}' if index is not None else 'vulkan=vk'
+    cmd = ['ffmpeg', '-hide_banner', '-v', 'verbose', '-init_hw_device', device, '-filter_hw_device', 'vk',
+           '-f', 'lavfi', '-i', 'color=black:s=64x64:d=1:r=1',
+           '-vf', 'format=yuv420p,hwupload,hwdownload,format=yuv420p', '-frames:v', '1', '-f', 'null', '-']
+    # The loader says why a driver it found could not be used (a missing library, most
+    # often); that is the one line worth having when the GPU is not picked up.
+    env = dict(os.environ, VK_LOADER_DEBUG='error')
+    try:
+        result = sp.run(cmd, capture_output=True, text=True, timeout=60, env=env)
+    except (OSError, sp.SubprocessError) as ex:
+        return None, [str(ex)]
+    # e.g. "ERROR: libGLdispatch.so.0: cannot open shared object file", once per attempt.
+    errors = list(dict.fromkeys(line.strip() for line in result.stderr.splitlines() if line.startswith('ERROR')))
+    if result.returncode != 0:
+        return None, errors or [result.stderr.strip()[-300:]]
+    match = re.search(r'Using device:\s*(.+)', result.stderr)
+    return (match.group(1).strip() if match else 'unnamed'), errors
+
+
+def _nvidia_icd_mounted():
+    return any(os.path.exists(os.path.join(d, 'nvidia_icd.json')) for d in _VULKAN_ICD_DIRS)
+
+
 def vulkan_device():
-    """'hardware', 'software' or None: what libplacebo would run on here. Cached."""
+    """'hardware', 'software' or None: what libplacebo would run on here. Cached.
+
+    The loader lists devices in its own order, so when the first is a software one the
+    next few are tried and a GPU among them is remembered by index for the filter.
+    """
     global _vulkan_device_cache
     if _vulkan_device_cache[0] == 'unchecked':
-        device = None
-        cmd = ['ffmpeg', '-hide_banner', '-v', 'verbose', '-init_hw_device', 'vulkan=vk', '-filter_hw_device', 'vk',
-               '-f', 'lavfi', '-i', 'color=black:s=64x64:d=1:r=1',
-               '-vf', 'format=yuv420p,hwupload,hwdownload,format=yuv420p', '-frames:v', '1', '-f', 'null', '-']
-        try:
-            result = sp.run(cmd, capture_output=True, text=True, timeout=60)
-            if result.returncode == 0:
-                match = re.search(r'Using device:\s*(.+)', result.stderr)
-                name = match.group(1).strip().lower() if match else ''
-                # Unknown names are treated as software: the only cost is that bt2390
-                # is not picked automatically.
-                device = 'hardware' if name and not any(m in name for m in _SOFTWARE_VULKAN_DEVICES) else 'software'
-                logger.debug(f"Vulkan device: {name or 'unnamed'} ({device})")
-            else:
-                logger.debug(f"No usable Vulkan device: {result.stderr.strip()[-300:]}")
-        except (OSError, sp.SubprocessError) as ex:
-            logger.debug(f"Vulkan probe failed: {ex}")
-        _vulkan_device_cache = ('checked', device)
+        kind, index = None, None
+        name, errors = _probe_vulkan()
+        if name and _is_software_vulkan(name):
+            for candidate in range(1, 4):
+                other, _ = _probe_vulkan(candidate)
+                if not other:
+                    break
+                if not _is_software_vulkan(other):
+                    name, index = other, candidate
+                    break
+        if name:
+            # Unknown names are treated as software: the only cost is that bt2390
+            # is not picked automatically.
+            kind = 'software' if _is_software_vulkan(name) else 'hardware'
+            logger.info(f"Vulkan device for tone mapping: {name} ({kind}{f', device {index}' if index else ''})")
+        else:
+            logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}")
+        if kind != 'hardware' and _nvidia_icd_mounted():
+            logger.warning("The NVIDIA Vulkan driver is mounted in this container but the GPU was not picked up; "
+                           "the loader said: " + (' | '.join(errors) or 'nothing'))
+        _vulkan_device_cache = ('checked', kind, name, index)
     return _vulkan_device_cache[1]
+
+
+def vulkan_device_args():
+    """The ffmpeg input arguments that put libplacebo on the device vulkan_device() chose."""
+    vulkan_device()
+    index = _vulkan_device_cache[3]
+    device = f'vulkan=vk:{index}' if index is not None else 'vulkan=vk'
+    return ['-init_hw_device', device, '-filter_hw_device', 'vk']
 
 
 def tonemap_capabilities():
@@ -890,8 +938,14 @@ def tonemap_capabilities():
                 available, note = False, 'no Vulkan device: install a Vulkan driver (mesa-vulkan-drivers) or expose the GPU'
             elif vulkan == 'hardware':
                 available, note = True, 'runs on the GPU'
+            elif _nvidia_icd_mounted():
+                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA Vulkan driver is '
+                                         'mounted but could not be loaded, see the server log')
             else:
-                available, note = True, 'runs on the CPU through software Vulkan, several times slower than hable'
+                caps_env = os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '')
+                hint = ('' if any(c in caps_env for c in ('graphics', 'all'))
+                        else ' (add graphics to NVIDIA_DRIVER_CAPABILITIES for the GPU)')
+                available, note = True, f'runs on the CPU through software Vulkan, several times slower than hable{hint}'
         else:
             available, note = cpu_ok, None if cpu_ok else 'ffmpeg was built without libzimg (zscale)'
         operators.append({'id': op, 'available': available, 'note': note})
