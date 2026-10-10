@@ -152,7 +152,10 @@ COPY --from=ffmpeg-builder /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg-builder /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 COPY --from=ffmpeg-builder /usr/local/lib/lib* /usr/local/lib/
 
-# Install runtime dependencies
+# Install runtime dependencies. libglvnd0, libx11-6 and libxext6 are what the NVIDIA
+# Vulkan driver (libGLX_nvidia.so.0, mounted by the container toolkit for the
+# "graphics" capability) links against; without them the Vulkan loader skips the GPU
+# and libplacebo silently falls back to Mesa's software device.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     nginx-extras supervisor \
@@ -167,6 +170,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     libass9 libfreetype6 libmp3lame0 libwebp7 libwebpmux3 \
     libzimg2 \
     liblcms2-2 libvulkan1 mesa-vulkan-drivers \
+    libglvnd0 libx11-6 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=python-source /opt/python3.14 /opt/python3.14
