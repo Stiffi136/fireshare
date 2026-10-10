@@ -879,8 +879,19 @@ def _probe_vulkan(index=None):
     return (match.group(1).strip() if match else 'unnamed'), errors
 
 
+def _vulkan_icd_manifests():
+    """The driver manifests the Vulkan loader will find, as 'dir/name' strings."""
+    found = []
+    for d in _VULKAN_ICD_DIRS:
+        try:
+            found.extend(os.path.join(d, n) for n in sorted(os.listdir(d)) if n.endswith('.json'))
+        except OSError:
+            continue
+    return found
+
+
 def _nvidia_icd_mounted():
-    return any(os.path.exists(os.path.join(d, 'nvidia_icd.json')) for d in _VULKAN_ICD_DIRS)
+    return any('nvidia' in os.path.basename(m).lower() for m in _vulkan_icd_manifests())
 
 
 def vulkan_device():
@@ -901,16 +912,26 @@ def vulkan_device():
                 if not _is_software_vulkan(other):
                     name, index = other, candidate
                     break
+        manifests = _vulkan_icd_manifests()
         if name:
             # Unknown names are treated as software: the only cost is that bt2390
             # is not picked automatically.
             kind = 'software' if _is_software_vulkan(name) else 'hardware'
-            logger.info(f"Vulkan device for tone mapping: {name} ({kind}{f', device {index}' if index else ''})")
+            logger.info(f"Vulkan device for tone mapping: {name} ({kind}{f', device {index}' if index else ''}); "
+                        f"driver manifests: {', '.join(manifests) or 'none'}")
         else:
-            logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}")
-        if kind != 'hardware' and _nvidia_icd_mounted():
-            logger.warning("The NVIDIA Vulkan driver is mounted in this container but the GPU was not picked up; "
-                           "the loader said: " + (' | '.join(errors) or 'nothing'))
+            logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}; "
+                        f"driver manifests: {', '.join(manifests) or 'none'}")
+        if kind != 'hardware':
+            if _nvidia_icd_mounted():
+                logger.warning("The NVIDIA Vulkan driver is mounted in this container but the GPU was not picked up; "
+                               "the loader said: " + (' | '.join(errors) or 'nothing'))
+            elif any(c in os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '') for c in ('graphics', 'all')):
+                logger.warning("NVIDIA_DRIVER_CAPABILITIES asks for graphics, but no NVIDIA Vulkan driver manifest "
+                               "(nvidia_icd.json) was mounted into this container; the container toolkit mounts it "
+                               "only when the host has one under /etc/vulkan/icd.d or /usr/share/vulkan/icd.d")
+            elif errors:
+                logger.warning("Vulkan loader errors while probing: " + ' | '.join(errors))
         _vulkan_device_cache = ('checked', kind, name, index)
     return _vulkan_device_cache[1]
 
