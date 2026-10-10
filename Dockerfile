@@ -170,7 +170,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     libass9 libfreetype6 libmp3lame0 libwebp7 libwebpmux3 \
     libzimg2 \
     liblcms2-2 libvulkan1 mesa-vulkan-drivers \
-    libglvnd0 libx11-6 libxext6 \
+    libglvnd0 libegl1 libx11-6 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=python-source /opt/python3.14 /opt/python3.14
@@ -192,6 +192,21 @@ RUN ln -sf /usr/local/bin/ffmpeg /usr/bin/ffmpeg && \
     ffmpeg -version && \
     echo "Available encoders:" && \
     ffmpeg -hide_banner -encoders 2>/dev/null | grep -E "(nvenc|libaom|libvpx|libx264)" || true
+
+# The NVIDIA Container Toolkit is meant to mount two manifests alongside the driver
+# libraries for the "graphics" capability: the Vulkan ICD manifest, without which the
+# Vulkan loader never looks at the driver, and libglvnd's EGL vendor manifest, without
+# which the driver aborts its own start-up while scanning for EGL vendors (it opens
+# neither /dev/nvidiactl nor the GPU and hands the loader no vkCreateInstance). Some
+# hosts, Unraid's driver plugin among them, mount the libraries and neither manifest,
+# so libplacebo silently ran bt.2390 on Mesa's software device. Shipping both covers
+# that: they only name libraries the toolkit mounts, and on a host without the GPU the
+# loader skips the Vulkan entry and carries on.
+RUN mkdir -p /etc/vulkan/icd.d /usr/share/glvnd/egl_vendor.d && printf '%s\n' \
+    '{ "file_format_version": "1.0.0", "ICD": { "library_path": "libGLX_nvidia.so.0", "api_version": "1.3.204" } }' \
+    > /etc/vulkan/icd.d/nvidia_icd.json && printf '%s\n' \
+    '{ "file_format_version": "1.0.0", "ICD": { "library_path": "libEGL_nvidia.so.0" } }' \
+    > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 
 RUN adduser --disabled-password --gecos '' nginx
 RUN ln -sf /dev/stdout /var/log/nginx/access.log \

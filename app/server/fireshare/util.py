@@ -879,8 +879,32 @@ def _probe_vulkan(index=None):
     return (match.group(1).strip() if match else 'unnamed'), errors
 
 
-def _nvidia_icd_mounted():
-    return any(os.path.exists(os.path.join(d, 'nvidia_icd.json')) for d in _VULKAN_ICD_DIRS)
+def _vulkan_icd_manifests():
+    """The driver manifests the Vulkan loader will find, as 'dir/name' strings."""
+    found = []
+    for d in _VULKAN_ICD_DIRS:
+        try:
+            found.extend(os.path.join(d, n) for n in sorted(os.listdir(d)) if n.endswith('.json'))
+        except OSError:
+            continue
+    return found
+
+
+_nvidia_driver_cache = None
+
+
+def _nvidia_driver_present():
+    """Whether the NVIDIA Vulkan driver library is in this container, i.e. the container
+    toolkit mounted the driver for the graphics capability. The manifest that names it
+    ships with the image, so it says nothing on its own."""
+    global _nvidia_driver_cache
+    if _nvidia_driver_cache is None:
+        try:
+            result = sp.run(['ldconfig', '-p'], capture_output=True, text=True, timeout=30)
+            _nvidia_driver_cache = 'libGLX_nvidia.so.0' in result.stdout
+        except (OSError, sp.SubprocessError):
+            _nvidia_driver_cache = False
+    return _nvidia_driver_cache
 
 
 def vulkan_device():
@@ -901,16 +925,24 @@ def vulkan_device():
                 if not _is_software_vulkan(other):
                     name, index = other, candidate
                     break
+        manifests = _vulkan_icd_manifests()
         if name:
             # Unknown names are treated as software: the only cost is that bt2390
             # is not picked automatically.
             kind = 'software' if _is_software_vulkan(name) else 'hardware'
-            logger.info(f"Vulkan device for tone mapping: {name} ({kind}{f', device {index}' if index else ''})")
+            logger.info(f"Vulkan device for tone mapping: {name} ({kind}{f', device {index}' if index else ''}); "
+                        f"driver manifests: {', '.join(manifests) or 'none'}")
         else:
-            logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}")
-        if kind != 'hardware' and _nvidia_icd_mounted():
-            logger.warning("The NVIDIA Vulkan driver is mounted in this container but the GPU was not picked up; "
-                           "the loader said: " + (' | '.join(errors) or 'nothing'))
+            logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}; "
+                        f"driver manifests: {', '.join(manifests) or 'none'}")
+        if kind != 'hardware':
+            if _nvidia_driver_present():
+                logger.warning("The NVIDIA Vulkan driver is in this container but the GPU was not picked up; "
+                               "the loader said: " + (' | '.join(errors) or 'nothing'))
+            elif any(c in os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '') for c in ('graphics', 'all')):
+                logger.warning("NVIDIA_DRIVER_CAPABILITIES asks for graphics, but no NVIDIA driver libraries were "
+                               "mounted into this container (libGLX_nvidia.so.0 is missing); is the GPU exposed "
+                               "with --gpus or the nvidia runtime?")
         _vulkan_device_cache = ('checked', kind, name, index)
     return _vulkan_device_cache[1]
 
@@ -938,9 +970,9 @@ def tonemap_capabilities():
                 available, note = False, 'no Vulkan device: install a Vulkan driver (mesa-vulkan-drivers) or expose the GPU'
             elif vulkan == 'hardware':
                 available, note = True, 'runs on the GPU'
-            elif _nvidia_icd_mounted():
-                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA Vulkan driver is '
-                                         'mounted but could not be loaded, see the server log')
+            elif _nvidia_driver_present():
+                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA driver is in the '
+                                         'container but the GPU was not picked up, see the server log')
             else:
                 caps_env = os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '')
                 hint = ('' if any(c in caps_env for c in ('graphics', 'all'))
