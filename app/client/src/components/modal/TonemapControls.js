@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Box, Button, Chip, Typography } from '@mui/material'
 import { VideoService } from '../../services'
-import TonemapCompareModal, { TONEMAP_LABELS } from './TonemapCompareModal'
+import TonemapCompareModal, { TONEMAP_LABELS, DeviceBadge, deviceLabel } from './TonemapCompareModal'
 
 const btnSx = {
   fontSize: 12,
@@ -178,10 +178,23 @@ const TonemapControls = ({ videoId, videoInfo, onInfoChange, onConverted, alertH
           <option key={o.id} value={o.id} disabled={!o.available}>
             {label(o.id)}
             {o.id === caps?.auto_default ? ' (default)' : ''}
+            {deviceLabel(o) ? ` · ${deviceLabel(o)}` : ''}
             {o.available ? '' : ' – unavailable'}
           </option>
         ))}
       </select>
+
+      {selectedOp && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: -0.5 }}>
+          <DeviceBadge op={selectedOp} />
+          <Typography sx={{ fontSize: 12, color: '#FFFFFF99', lineHeight: 1.4 }}>
+            {selectedOp.device === 'gpu'
+              ? `${label(selectedOp.id)} runs on your GPU`
+              : `${label(selectedOp.id)} runs on the CPU`}
+            {selectedOp.note ? ` · ${selectedOp.note}` : ''}
+          </Typography>
+        </Box>
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
         <Button size="small" variant="outlined" disabled={!canApply} onClick={() => apply(value)} sx={btnSx}>
