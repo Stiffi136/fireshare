@@ -527,7 +527,9 @@ def create_poster(video_path, out_path, second=0):
     # reads one ffmpeg is still writing, and a failed attempt leaves the old one in place.
     tmp_path = out_path.parent / (out_path.stem + '.tmp' + out_path.suffix)
     # -ss before -i uses fast keyframe seek, reliable even for large high-bitrate files
-    cmd = ['ffmpeg', '-v', 'quiet', '-y', '-ss', str(second), '-i', str(video_path), '-vframes', '1', '-vf', 'scale=iw:ih:force_original_aspect_ratio=decrease', str(tmp_path)]
+    # -threads 1 for the same reason as render_tonemap_preview: FFmpeg 6.1.0 can abort
+    # when a one-frame limit stops a threaded decode of a stream-copied file.
+    cmd = ['ffmpeg', '-v', 'quiet', '-y', '-threads', '1', '-ss', str(second), '-i', str(video_path), '-vframes', '1', '-vf', 'scale=iw:ih:force_original_aspect_ratio=decrease', str(tmp_path)]
     logger.debug(f"$ {' '.join(cmd)}")
     ret = sp.call(cmd)
     e = time.time()
@@ -804,6 +806,19 @@ def stream_needs_pq_assumed(stream):
     return is_hdr_stream(stream) and transfer not in HDR_TRANSFERS
 
 
+def tonemap_device(operator):
+    """'gpu' or 'cpu': where `operator` would run here. bt2390 is libplacebo's alone;
+    the other curves go through libplacebo as well when it has a real GPU, and
+    through zscale + the built-in tonemap filter (CPU) otherwise."""
+    if operator == 'bt2390':
+        return 'gpu' if vulkan_device() == 'hardware' else 'cpu'
+    return 'gpu' if 'libplacebo' in ffmpeg_filters() and vulkan_device() == 'hardware' else 'cpu'
+
+
+def _uses_libplacebo(operator):
+    return operator == 'bt2390' or tonemap_device(operator) == 'gpu'
+
+
 def tonemap_filter(operator, assume_pq=False):
     """The ffmpeg input arguments and video filter that turn HDR frames into BT.709 SDR.
 
@@ -815,9 +830,10 @@ def tonemap_filter(operator, assume_pq=False):
     # A stream with no transfer tag is treated as HDR10. The tags are set on the decoded
     # frames so the conversion reads them; the file is not touched.
     prefix = 'setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,' if assume_pq else ''
-    if operator == 'bt2390':
+    if _uses_libplacebo(operator):
+        curve = 'bt.2390' if operator == 'bt2390' else operator
         vf = (f"{prefix}format=yuv420p10le,hwupload,"
-              "libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p,"
+              f"libplacebo=tonemapping={curve}:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p,"
               "hwdownload,format=yuv420p")
         return vulkan_device_args(), vf
     # PQ/HLG to linear light with 100 nits at 1.0, float RGB in BT.709 primaries, the
@@ -980,12 +996,14 @@ def tonemap_capabilities():
                 hint = ('' if any(c in caps_env for c in ('graphics', 'all'))
                         else '; add graphics to NVIDIA_DRIVER_CAPABILITIES for the GPU')
                 available, device, note = True, 'cpu', f'software Vulkan, several times slower than hable{hint}'
-        else:
+        elif has_placebo and vulkan == 'hardware':
+            # libplacebo has these curves too, and runs them on the GPU.
+            available, device, note = True, 'gpu', None
+        elif cpu_ok:
             # zscale and the built-in tonemap filter are CPU filters whatever the host has.
-            if cpu_ok:
-                available, device, note = True, 'cpu', None
-            else:
-                available, device, note = False, None, 'ffmpeg was built without libzimg (zscale)'
+            available, device, note = True, 'cpu', None
+        else:
+            available, device, note = False, None, 'ffmpeg was built without libzimg (zscale)'
         operators.append({'id': op, 'available': available, 'device': device, 'note': note})
     caps = {'operators': operators, 'vulkan': vulkan}
     caps['auto_default'] = resolve_tonemap_default('auto', caps)
@@ -1044,7 +1062,7 @@ def render_tonemap_preview(video_path, seconds, operator, out_dir, width=1280, z
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = f"{seconds:.1f}-{operator or 'as_stored'}"
+    name = f"{seconds:.1f}-{operator or 'as_stored'}" + (f"-{tonemap_device(operator)}" if operator else '')
     tile, crop = out_dir / f"{name}.webp", out_dir / f"{name}-zoom.webp"
     if tile.exists() and crop.exists():
         return tile, crop
@@ -1056,7 +1074,10 @@ def render_tonemap_preview(video_path, seconds, operator, out_dir, width=1280, z
     graph = (f"[0:v]{vf},split[a][b];[a]scale={width}:-2[tile];"
              f"[b]crop=min(iw\\,{zw}):min(ih\\,{zh}):(iw-ow)/2:(ih-oh)/2[zoom]")
     tile_tmp, crop_tmp = out_dir / f"{name}.tmp.webp", out_dir / f"{name}-zoom.tmp.webp"
-    cmd = ['ffmpeg', '-v', 'error', '-y', *input_args, '-ss', f'{seconds:.3f}', '-i', str(video_path),
+    # -threads 1: FFmpeg 6.1.0 aborts on an assertion when a frame limit stops a
+    # frame-threaded decode of a stream-copied file (which is what a crop is); a
+    # single frame does not need the threads anyway.
+    cmd = ['ffmpeg', '-v', 'error', '-y', '-threads', '1', *input_args, '-ss', f'{seconds:.3f}', '-i', str(video_path),
            '-filter_complex', graph,
            '-map', '[tile]', '-frames:v', '1', '-c:v', 'libwebp', '-quality', '85', str(tile_tmp),
            '-map', '[zoom]', '-frames:v', '1', '-c:v', 'libwebp', '-quality', '85', str(crop_tmp)]

@@ -49,7 +49,7 @@ export const previewUrl = (videoId, seconds, operator, zoom = false) =>
  * One rendered frame. The server renders it on the first request, which takes a few
  * seconds for a big file, so the tile shows a spinner until the image arrives.
  */
-const Tile = ({ videoId, seconds, operator, onZoom }) => {
+const Tile = ({ videoId, seconds, operator, aspect, onZoom }) => {
   const [state, setState] = useState('loading')
   useEffect(() => setState('loading'), [videoId, seconds, operator])
   return (
@@ -62,7 +62,7 @@ const Tile = ({ videoId, seconds, operator, onZoom }) => {
         position: 'relative',
         display: 'block',
         width: '100%',
-        aspectRatio: '16 / 9',
+        aspectRatio: aspect,
         p: 0,
         border: '1px solid #FFFFFF1A',
         borderRadius: '8px',
@@ -77,7 +77,7 @@ const Tile = ({ videoId, seconds, operator, onZoom }) => {
         alt=""
         onLoad={() => setState('ready')}
         onError={() => setState('error')}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: state === 'ready' ? 'block' : 'none' }}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: state === 'ready' ? 'block' : 'none' }}
       />
       {state === 'loading' && (
         <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -172,6 +172,7 @@ const TonemapCompareModal = ({
 
   const canApply = selected && !busy && (selected !== current || !videoInfo?.has_sdr)
   const columns = `repeat(${operators.length}, minmax(0, 1fr))`
+  const aspect = videoInfo?.width && videoInfo?.height ? `${videoInfo.width} / ${videoInfo.height}` : '16 / 9'
 
   return (
     <Modal
@@ -338,12 +339,13 @@ const TonemapCompareModal = ({
                       videoId={videoId}
                       seconds={t}
                       operator={op.id}
+                      aspect={aspect}
                       onZoom={(s, o) => setZoom({ seconds: s, operator: o })}
                     />
                   ) : (
                     <Box
                       key={op.id}
-                      sx={{ aspectRatio: '16 / 9', border: '1px dashed #FFFFFF1A', borderRadius: '8px' }}
+                      sx={{ aspectRatio: aspect, border: '1px dashed #FFFFFF1A', borderRadius: '8px' }}
                     />
                   ),
                 )}
@@ -450,7 +452,7 @@ const TonemapCompareModal = ({
           >
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 2, py: 1 }}>
               <Typography sx={{ fontSize: 12, color: '#FFFFFFA6', fontFamily: 'monospace' }}>
-                frame {formatTime(zoom.seconds)} · centre crop at native pixels
+                frame {formatTime(zoom.seconds)} · 1280x720 centre crop at native pixels · scroll to pan
               </Typography>
               <Button size="small" variant="outlined" onClick={() => setZoom(null)} sx={ghostBtnSx}>
                 Close
@@ -461,9 +463,9 @@ const TonemapCompareModal = ({
                 flex: 1,
                 minHeight: 0,
                 overflow: 'auto',
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.5,
                 px: 2,
                 pb: 2,
               }}
@@ -472,11 +474,11 @@ const TonemapCompareModal = ({
                 { operator: 'as_stored', label: 'as stored' },
                 { operator: zoom.operator, label: TONEMAP_LABELS[zoom.operator] || zoom.operator },
               ].map(({ operator, label }) => (
-                <Box key={operator} sx={{ minWidth: 0 }}>
+                <Box key={operator} sx={{ flex: 'none' }}>
                   <img
                     src={previewUrl(videoId, zoom.seconds, operator, true)}
                     alt={`${label} crop`}
-                    style={{ width: '100%', height: 'auto', borderRadius: 6, display: 'block' }}
+                    style={{ width: 'auto', maxWidth: 'none', height: 'auto', borderRadius: 6, display: 'block' }}
                   />
                   <Typography sx={{ fontSize: 11, color: '#FFFFFFA6', fontFamily: 'monospace', mt: 0.5 }}>
                     {label} · 1:1
