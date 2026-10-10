@@ -1145,8 +1145,9 @@ def clear_all_corrupt_status():
 # HDR tone mapping: what the server can do, and the compare previews
 # ---------------------------------------------------------------------------
 
-_PREVIEW_WIDTH = 1280
-_PREVIEW_ZOOM = (900, 540)
+# Tiles are sized to be read on a large screen; the zoom crop is shown at native pixels.
+_PREVIEW_WIDTH = 1920
+_PREVIEW_ZOOM = (1280, 720)
 
 # One render per (video, time, operator) at a time: the compare modal asks for every
 # tile of a frame at once, and a second open must wait for the first rather than render
@@ -1205,7 +1206,8 @@ def tonemap_frames(video_id):
 @require_perm(P.EDIT_OWN, P.EDIT_ANY)
 def tonemap_preview(video_id):
     """One frame of the video at ?t= seconds through ?op= (an operator, or `as_stored`),
-    as WebP: scaled to the compare tile, or a native-pixel centre crop with ?zoom=1.
+    as WebP: scaled to 1920 wide for the compare tile, or a 1280x720 native-pixel
+    centre crop with ?zoom=1.
     Rendered on first request and kept under the video's derived directory."""
     video, video_info, error = _editable_video(video_id)
     if error:
