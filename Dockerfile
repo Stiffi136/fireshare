@@ -193,6 +193,16 @@ RUN ln -sf /usr/local/bin/ffmpeg /usr/bin/ffmpeg && \
     echo "Available encoders:" && \
     ffmpeg -hide_banner -encoders 2>/dev/null | grep -E "(nvenc|libaom|libvpx|libx264)" || true
 
+# The Vulkan loader only considers a driver it has a manifest for. The NVIDIA Container
+# Toolkit is meant to mount nvidia_icd.json alongside the driver libraries for the
+# "graphics" capability, but some hosts (Unraid's driver plugin among them) end up with
+# the libraries mounted and no manifest, so libplacebo silently runs on Mesa's software
+# device. Shipping the manifest covers that: it names the library the toolkit mounts,
+# and on a host without the GPU the loader skips it and carries on.
+RUN mkdir -p /etc/vulkan/icd.d && printf '%s\n' \
+    '{ "file_format_version": "1.0.0", "ICD": { "library_path": "libGLX_nvidia.so.0", "api_version": "1.3.204" } }' \
+    > /etc/vulkan/icd.d/nvidia_icd.json
+
 RUN adduser --disabled-password --gecos '' nginx
 RUN ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log

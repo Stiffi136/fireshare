@@ -890,8 +890,21 @@ def _vulkan_icd_manifests():
     return found
 
 
-def _nvidia_icd_mounted():
-    return any('nvidia' in os.path.basename(m).lower() for m in _vulkan_icd_manifests())
+_nvidia_driver_cache = None
+
+
+def _nvidia_driver_present():
+    """Whether the NVIDIA Vulkan driver library is in this container, i.e. the container
+    toolkit mounted the driver for the graphics capability. The manifest that names it
+    ships with the image, so it says nothing on its own."""
+    global _nvidia_driver_cache
+    if _nvidia_driver_cache is None:
+        try:
+            result = sp.run(['ldconfig', '-p'], capture_output=True, text=True, timeout=30)
+            _nvidia_driver_cache = 'libGLX_nvidia.so.0' in result.stdout
+        except (OSError, sp.SubprocessError):
+            _nvidia_driver_cache = False
+    return _nvidia_driver_cache
 
 
 def vulkan_device():
@@ -923,15 +936,13 @@ def vulkan_device():
             logger.info(f"No usable Vulkan device for tone mapping: {' | '.join(errors)[-300:]}; "
                         f"driver manifests: {', '.join(manifests) or 'none'}")
         if kind != 'hardware':
-            if _nvidia_icd_mounted():
-                logger.warning("The NVIDIA Vulkan driver is mounted in this container but the GPU was not picked up; "
+            if _nvidia_driver_present():
+                logger.warning("The NVIDIA Vulkan driver is in this container but the GPU was not picked up; "
                                "the loader said: " + (' | '.join(errors) or 'nothing'))
             elif any(c in os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '') for c in ('graphics', 'all')):
-                logger.warning("NVIDIA_DRIVER_CAPABILITIES asks for graphics, but no NVIDIA Vulkan driver manifest "
-                               "(nvidia_icd.json) was mounted into this container; the container toolkit mounts it "
-                               "only when the host has one under /etc/vulkan/icd.d or /usr/share/vulkan/icd.d")
-            elif errors:
-                logger.warning("Vulkan loader errors while probing: " + ' | '.join(errors))
+                logger.warning("NVIDIA_DRIVER_CAPABILITIES asks for graphics, but no NVIDIA driver libraries were "
+                               "mounted into this container (libGLX_nvidia.so.0 is missing); is the GPU exposed "
+                               "with --gpus or the nvidia runtime?")
         _vulkan_device_cache = ('checked', kind, name, index)
     return _vulkan_device_cache[1]
 
@@ -959,9 +970,9 @@ def tonemap_capabilities():
                 available, note = False, 'no Vulkan device: install a Vulkan driver (mesa-vulkan-drivers) or expose the GPU'
             elif vulkan == 'hardware':
                 available, note = True, 'runs on the GPU'
-            elif _nvidia_icd_mounted():
-                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA Vulkan driver is '
-                                         'mounted but could not be loaded, see the server log')
+            elif _nvidia_driver_present():
+                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA driver is in the '
+                                         'container but the GPU was not picked up, see the server log')
             else:
                 caps_env = os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '')
                 hint = ('' if any(c in caps_env for c in ('graphics', 'all'))
