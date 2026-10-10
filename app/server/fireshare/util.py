@@ -979,7 +979,8 @@ def tonemap_capabilities():
                         else ' (add graphics to NVIDIA_DRIVER_CAPABILITIES for the GPU)')
                 available, note = True, f'runs on the CPU through software Vulkan, several times slower than hable{hint}'
         else:
-            available, note = cpu_ok, None if cpu_ok else 'ffmpeg was built without libzimg (zscale)'
+            # zscale and the built-in tonemap filter are CPU filters whatever the host has.
+            available, note = cpu_ok, 'runs on the CPU' if cpu_ok else 'ffmpeg was built without libzimg (zscale)'
         operators.append({'id': op, 'available': available, 'note': note})
     caps = {'operators': operators, 'vulkan': vulkan}
     caps['auto_default'] = resolve_tonemap_default('auto', caps)
