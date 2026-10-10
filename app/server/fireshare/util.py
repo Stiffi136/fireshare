@@ -963,25 +963,30 @@ def tonemap_capabilities():
     vulkan = vulkan_device() if has_placebo else None
     operators = []
     for op in TONEMAP_OPERATORS:
+        # device says where the work runs ('gpu' or 'cpu', None when the operator is
+        # unavailable); note is the explanation the UI shows next to it, when any.
         if op == 'bt2390':
             if not has_placebo:
-                available, note = False, 'ffmpeg was built without libplacebo'
+                available, device, note = False, None, 'ffmpeg was built without libplacebo'
             elif vulkan is None:
-                available, note = False, 'no Vulkan device: install a Vulkan driver (mesa-vulkan-drivers) or expose the GPU'
+                available, device, note = False, None, 'no Vulkan device: install a Vulkan driver (mesa-vulkan-drivers) or expose the GPU'
             elif vulkan == 'hardware':
-                available, note = True, 'runs on the GPU'
+                available, device, note = True, 'gpu', None
             elif _nvidia_driver_present():
-                available, note = True, ('runs on the CPU through software Vulkan: the NVIDIA driver is in the '
-                                         'container but the GPU was not picked up, see the server log')
+                available, device, note = True, 'cpu', ('software Vulkan: the NVIDIA driver is in the container but the '
+                                                        'GPU was not picked up, see the server log')
             else:
                 caps_env = os.environ.get('NVIDIA_DRIVER_CAPABILITIES', '')
                 hint = ('' if any(c in caps_env for c in ('graphics', 'all'))
-                        else ' (add graphics to NVIDIA_DRIVER_CAPABILITIES for the GPU)')
-                available, note = True, f'runs on the CPU through software Vulkan, several times slower than hable{hint}'
+                        else '; add graphics to NVIDIA_DRIVER_CAPABILITIES for the GPU')
+                available, device, note = True, 'cpu', f'software Vulkan, several times slower than hable{hint}'
         else:
             # zscale and the built-in tonemap filter are CPU filters whatever the host has.
-            available, note = cpu_ok, 'runs on the CPU' if cpu_ok else 'ffmpeg was built without libzimg (zscale)'
-        operators.append({'id': op, 'available': available, 'note': note})
+            if cpu_ok:
+                available, device, note = True, 'cpu', None
+            else:
+                available, device, note = False, None, 'ffmpeg was built without libzimg (zscale)'
+        operators.append({'id': op, 'available': available, 'device': device, 'note': note})
     caps = {'operators': operators, 'vulkan': vulkan}
     caps['auto_default'] = resolve_tonemap_default('auto', caps)
     return caps

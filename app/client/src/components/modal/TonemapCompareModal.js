@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Button, CircularProgress, IconButton, Modal, Paper, Tooltip, Typography } from '@mui/material'
+import { Box, Button, Chip, CircularProgress, IconButton, Modal, Paper, Tooltip, Typography } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import { getUrl } from '../../common/utils'
@@ -13,6 +13,28 @@ export const TONEMAP_LABELS = {
 }
 
 const AS_STORED = { id: 'as_stored', available: true, note: 'reference, no tone map' }
+
+/** Where an operator runs, as the badge text: 'GPU', 'CPU', or null when unavailable. */
+export const deviceLabel = (op) => (op?.device === 'gpu' ? 'GPU' : op?.device === 'cpu' ? 'CPU' : null)
+
+const deviceBadgeSx = (device) => ({
+  height: 18,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  borderRadius: '4px',
+  color: device === 'gpu' ? '#4CC08A' : '#FFFFFFB3',
+  border: `1px solid ${device === 'gpu' ? '#4CC08A88' : '#FFFFFF33'}`,
+  bgcolor: device === 'gpu' ? '#4CC08A14' : '#FFFFFF0A',
+  '& .MuiChip-label': { px: 0.75 },
+})
+
+/** The GPU / CPU badge shown beside an operator wherever it can be chosen. */
+export const DeviceBadge = ({ op, sx }) => {
+  const label = deviceLabel(op)
+  if (!label) return null
+  return <Chip label={label} size="small" sx={{ ...deviceBadgeSx(op.device), ...sx }} />
+}
 
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60)
@@ -257,6 +279,7 @@ const TonemapCompareModal = ({
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {isRef ? 'As stored' : TONEMAP_LABELS[op.id] || op.id}
                       </span>
+                      {!isRef && <DeviceBadge op={op} />}
                       {op.id === current && (
                         <Box
                           component="span"
@@ -284,7 +307,11 @@ const TonemapCompareModal = ({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {isRef ? op.note : op.available ? op.note || 'available' : op.note || 'not available'}
+                      {isRef
+                        ? op.note
+                        : op.available
+                          ? op.note || (op.device === 'gpu' ? 'runs on your GPU' : 'runs on the CPU')
+                          : op.note || 'not available'}
                     </Typography>
                   </Box>
                 </Tooltip>

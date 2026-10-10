@@ -23,7 +23,7 @@ import {
   useTheme,
 } from '@mui/material'
 import SnackbarAlert from '../components/alert/SnackbarAlert'
-import { TONEMAP_LABELS } from '../components/modal/TonemapCompareModal'
+import { TONEMAP_LABELS, deviceLabel } from '../components/modal/TonemapCompareModal'
 import SaveIcon from '@mui/icons-material/Save'
 import SensorsIcon from '@mui/icons-material/Sensors'
 import RssFeedIcon from '@mui/icons-material/RssFeed'
@@ -1215,6 +1215,7 @@ const Settings = ({ isAdmin, currentUser, can = () => false }) => {
                           {(tonemapCaps?.operators || []).map((op) => (
                             <option key={op.id} value={op.id} disabled={!op.available}>
                               {TONEMAP_LABELS[op.id] || op.id}
+                              {deviceLabel(op) ? ` · ${deviceLabel(op)}` : ''}
                               {op.note ? ` – ${op.note}` : ''}
                             </option>
                           ))}
