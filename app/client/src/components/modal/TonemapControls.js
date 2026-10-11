@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Box, Button, Chip, Typography } from '@mui/material'
 import { VideoService } from '../../services'
-import TonemapCompareModal, { TONEMAP_LABELS, DeviceBadge, deviceLabel } from './TonemapCompareModal'
+import TonemapCompareModal, { TONEMAP_LABELS, DeviceBadge, deviceLabel, OperatorInfo } from './TonemapCompareModal'
 
 const btnSx = {
   fontSize: 12,
@@ -187,6 +187,7 @@ const TonemapControls = ({ videoId, videoInfo, onInfoChange, onConverted, alertH
       {selectedOp && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: -0.5 }}>
           <DeviceBadge op={selectedOp} />
+          <OperatorInfo operator={selectedOp.id} />
           <Typography sx={{ fontSize: 12, color: '#FFFFFF99', lineHeight: 1.4 }}>
             {selectedOp.device === 'gpu'
               ? `${label(selectedOp.id)} runs on your GPU`

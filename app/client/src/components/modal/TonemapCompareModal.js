@@ -3,14 +3,45 @@ import { Box, Button, Chip, CircularProgress, IconButton, Modal, Paper, Tooltip,
 import CloseIcon from '@mui/icons-material/Close'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { getUrl } from '../../common/utils'
 import { VideoService } from '../../services'
 
 export const TONEMAP_LABELS = {
   bt2390: 'bt.2390',
+  spline: 'spline',
+  bt2446a: 'bt.2446a',
   hable: 'hable',
   mobius: 'mobius',
   reinhard: 'reinhard',
+}
+
+/** What each curve does to the picture, for people who do not care how. */
+export const TONEMAP_DESCRIPTIONS = {
+  bt2390:
+    "The broadcast industry's standard conversion. Even-handed and faithful: keeps the picture's overall brightness and lets the brightest highlights roll off gently.",
+  spline:
+    "libplacebo's own curve, tuned by eye. Keeps contrast and punch, so the picture stays lively rather than going flat.",
+  bt2446a: 'The other broadcast standard, written for live TV. Brighter and more vivid than bt.2390.',
+  hable: 'The curve many games use on their own displays. Deep shadows and strong contrast, with a film-like feel.',
+  mobius:
+    'Leaves everything but the brightest parts as they are and only squeezes the highlights. The closest to how the game looked, apart from the peaks.',
+  reinhard:
+    'The oldest and simplest approach. Gentle on highlights, but tends to look lighter and a little washed out.',
+}
+
+/** A small info icon whose hover text is the operator's plain-language description. */
+export const OperatorInfo = ({ operator, sx }) => {
+  const text = TONEMAP_DESCRIPTIONS[operator]
+  if (!text) return null
+  return (
+    <Tooltip title={text} placement="top" arrow enterTouchDelay={0}>
+      <InfoOutlinedIcon
+        onClick={(e) => e.stopPropagation()}
+        sx={{ fontSize: 15, color: '#FFFFFF80', cursor: 'help', flex: 'none', '&:hover': { color: '#fff' }, ...sx }}
+      />
+    </Tooltip>
+  )
 }
 
 const AS_STORED = 'as_stored'
@@ -405,80 +436,80 @@ const TonemapCompareModal = ({
             {operators.map((op) => {
               const checked = selected === op.id
               return (
-                <Tooltip key={op.id} title={op.note || ''} placement="top" disableHoverListener={!op.note}>
-                  <Box
-                    component="button"
-                    type="button"
-                    role="radio"
-                    aria-checked={checked}
-                    disabled={!op.available || busy}
-                    onClick={() => op.available && setSelected(op.id)}
+                <Box
+                  key={op.id}
+                  component="button"
+                  type="button"
+                  role="radio"
+                  aria-checked={checked}
+                  disabled={!op.available || busy}
+                  onClick={() => op.available && setSelected(op.id)}
+                  sx={{
+                    textAlign: 'left',
+                    border: '1px solid',
+                    borderColor: checked ? '#4AA3FF' : '#FFFFFF1F',
+                    boxShadow: checked ? 'inset 0 0 0 1px #4AA3FF' : 'none',
+                    borderRadius: '10px',
+                    bgcolor: '#0B1B2E',
+                    color: op.available ? '#fff' : '#FFFFFF55',
+                    p: 1,
+                    cursor: op.available ? 'pointer' : 'default',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.5,
+                    minWidth: 0,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600, fontSize: 13 }}>
+                    <Box
+                      sx={{
+                        width: 13,
+                        height: 13,
+                        borderRadius: '50%',
+                        border: '2px solid',
+                        borderColor: checked ? '#4AA3FF' : '#FFFFFF80',
+                        flex: 'none',
+                        background: checked ? 'radial-gradient(circle, #4AA3FF 45%, transparent 50%)' : 'none',
+                      }}
+                    />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {nameOf(op.id)}
+                    </span>
+                    <OperatorInfo operator={op.id} />
+                    <DeviceBadge op={op} />
+                    {op.id === current && (
+                      <Box
+                        component="span"
+                        sx={{
+                          ml: 'auto',
+                          fontSize: 10,
+                          bgcolor: '#4AA3FF',
+                          color: '#061322',
+                          borderRadius: '4px',
+                          px: 0.6,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        current
+                      </Box>
+                    )}
+                  </Box>
+                  <Typography
                     sx={{
-                      textAlign: 'left',
-                      border: '1px solid',
-                      borderColor: checked ? '#4AA3FF' : '#FFFFFF1F',
-                      boxShadow: checked ? 'inset 0 0 0 1px #4AA3FF' : 'none',
-                      borderRadius: '10px',
-                      bgcolor: '#0B1B2E',
-                      color: op.available ? '#fff' : '#FFFFFF55',
-                      p: 1,
-                      cursor: op.available ? 'pointer' : 'default',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 0.5,
-                      minWidth: 0,
-                      fontFamily: 'inherit',
+                      fontSize: 10.5,
+                      color: '#FFFFFFA6',
+                      fontFamily: 'monospace',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600, fontSize: 13 }}>
-                      <Box
-                        sx={{
-                          width: 13,
-                          height: 13,
-                          borderRadius: '50%',
-                          border: '2px solid',
-                          borderColor: checked ? '#4AA3FF' : '#FFFFFF80',
-                          flex: 'none',
-                          background: checked ? 'radial-gradient(circle, #4AA3FF 45%, transparent 50%)' : 'none',
-                        }}
-                      />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {nameOf(op.id)}
-                      </span>
-                      <DeviceBadge op={op} />
-                      {op.id === current && (
-                        <Box
-                          component="span"
-                          sx={{
-                            ml: 'auto',
-                            fontSize: 10,
-                            bgcolor: '#4AA3FF',
-                            color: '#061322',
-                            borderRadius: '4px',
-                            px: 0.6,
-                            fontFamily: 'monospace',
-                          }}
-                        >
-                          current
-                        </Box>
-                      )}
-                    </Box>
-                    <Typography
-                      sx={{
-                        fontSize: 10.5,
-                        color: '#FFFFFFA6',
-                        fontFamily: 'monospace',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {op.available
-                        ? op.note || (op.device === 'gpu' ? 'runs on your GPU' : 'runs on the CPU')
-                        : op.note || 'not available'}
-                    </Typography>
-                  </Box>
-                </Tooltip>
+                    {op.available
+                      ? op.note || (op.device === 'gpu' ? 'runs on your GPU' : 'runs on the CPU')
+                      : op.note || 'not available'}
+                  </Typography>
+                </Box>
               )
             })}
           </Box>

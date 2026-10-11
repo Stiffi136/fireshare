@@ -7,7 +7,7 @@ import json
 import subprocess as sp
 import xxhash
 from fireshare import logger
-from fireshare.constants import TONEMAP_OPERATORS, TONEMAP_OFF  # noqa: F401 (re-exported)
+from fireshare.constants import TONEMAP_OPERATORS, TONEMAP_PLACEBO_ONLY, TONEMAP_OFF  # noqa: F401 (re-exported)
 import time
 import glob
 import shutil
@@ -806,17 +806,21 @@ def stream_needs_pq_assumed(stream):
     return is_hdr_stream(stream) and transfer not in HDR_TRANSFERS
 
 
+# libplacebo's names for the curves, where they differ from the ids.
+_PLACEBO_CURVES = {'bt2390': 'bt.2390', 'bt2446a': 'bt.2446a'}
+
+
 def tonemap_device(operator):
-    """'gpu' or 'cpu': where `operator` would run here. bt2390 is libplacebo's alone;
-    the other curves go through libplacebo as well when it has a real GPU, and
-    through zscale + the built-in tonemap filter (CPU) otherwise."""
-    if operator == 'bt2390':
+    """'gpu' or 'cpu': where `operator` would run here. The libplacebo-only curves run
+    wherever libplacebo does; the other curves go through libplacebo as well when it
+    has a real GPU, and through zscale + the built-in tonemap filter (CPU) otherwise."""
+    if operator in TONEMAP_PLACEBO_ONLY:
         return 'gpu' if vulkan_device() == 'hardware' else 'cpu'
     return 'gpu' if 'libplacebo' in ffmpeg_filters() and vulkan_device() == 'hardware' else 'cpu'
 
 
 def _uses_libplacebo(operator):
-    return operator == 'bt2390' or tonemap_device(operator) == 'gpu'
+    return operator in TONEMAP_PLACEBO_ONLY or tonemap_device(operator) == 'gpu'
 
 
 def tonemap_filter(operator, assume_pq=False):
@@ -831,7 +835,7 @@ def tonemap_filter(operator, assume_pq=False):
     # frames so the conversion reads them; the file is not touched.
     prefix = 'setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,' if assume_pq else ''
     if _uses_libplacebo(operator):
-        curve = 'bt.2390' if operator == 'bt2390' else operator
+        curve = _PLACEBO_CURVES.get(operator, operator)
         vf = (f"{prefix}format=yuv420p10le,hwupload,"
               f"libplacebo=tonemapping={curve}:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:format=yuv420p,"
               "hwdownload,format=yuv420p")
@@ -981,7 +985,7 @@ def tonemap_capabilities():
     for op in TONEMAP_OPERATORS:
         # device says where the work runs ('gpu' or 'cpu', None when the operator is
         # unavailable); note is the explanation the UI shows next to it, when any.
-        if op == 'bt2390':
+        if op in TONEMAP_PLACEBO_ONLY:
             if not has_placebo:
                 available, device, note = False, None, 'ffmpeg was built without libplacebo'
             elif vulkan is None:
@@ -1022,7 +1026,7 @@ def resolve_tonemap_default(configured, caps=None):
         return configured
     if 'bt2390' in available and caps.get('vulkan') == 'hardware':
         return 'bt2390'
-    for op in ('hable', 'bt2390', 'mobius', 'reinhard'):
+    for op in ('hable', 'bt2390', 'spline', 'bt2446a', 'mobius', 'reinhard'):
         if op in available:
             return op
     return None

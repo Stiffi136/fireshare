@@ -265,7 +265,9 @@ Open an HDR video, choose **Edit**, and use the **Dynamic Range** row: pick an o
 
 | Operator | Needs                                  | Notes                                                  |
 | -------- | -------------------------------------- | ------------------------------------------------------ |
-| bt.2390  | ffmpeg with libplacebo + a Vulkan device | Best looking. On the GPU with the NVIDIA runtime, otherwise through Mesa's software Vulkan, which is slow |
+| bt.2390  | ffmpeg with libplacebo + a Vulkan device | The broadcast standard. Even-handed and faithful. On the GPU with the NVIDIA runtime, otherwise through Mesa's software Vulkan, which is slow |
+| spline   | ffmpeg with libplacebo + a Vulkan device | libplacebo's own curve; keeps contrast and punch        |
+| bt.2446a | ffmpeg with libplacebo + a Vulkan device | The other broadcast standard; brighter and more vivid   |
 | hable    | ffmpeg with libzimg (zscale), or libplacebo + GPU | Default on CPU, darker and more contrasty      |
 | mobius   | ffmpeg with libzimg (zscale), or libplacebo + GPU | Lighter than hable                             |
 | reinhard | ffmpeg with libzimg (zscale), or libplacebo + GPU | Lightest                                       |

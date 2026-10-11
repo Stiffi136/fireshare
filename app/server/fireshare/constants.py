@@ -50,9 +50,12 @@ DEFAULT_CONFIG = {
 SUPPORTED_FILE_TYPES = ['mp4', 'm4v', 'mov', 'webm']
 SUPPORTED_FILE_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.webm']
 
-# HDR -> SDR tone map operators, in the order the UI lists them. bt2390 runs through
-# libplacebo; the rest through the built-in tonemap filter (which needs zscale/libzimg).
-TONEMAP_OPERATORS = ('bt2390', 'hable', 'mobius', 'reinhard')
+# HDR -> SDR tone map operators, in the order the UI lists them. All run through
+# libplacebo when it has a GPU; hable, mobius and reinhard can also run through the
+# built-in tonemap filter (which needs zscale/libzimg) on the CPU.
+TONEMAP_OPERATORS = ('bt2390', 'spline', 'bt2446a', 'hable', 'mobius', 'reinhard')
+# The curves only libplacebo has; the rest also exist in the built-in tonemap filter.
+TONEMAP_PLACEBO_ONLY = ('bt2390', 'spline', 'bt2446a')
 # Stored in VideoInfo.tonemap when the tone map was removed on purpose, so the
 # automatic scan does not put the default back. NULL means nothing was ever chosen.
 TONEMAP_OFF = 'none'
