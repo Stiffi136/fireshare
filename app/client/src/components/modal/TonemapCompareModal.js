@@ -78,14 +78,26 @@ const cornerLabelSx = {
  */
 const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height, fit }) => {
   const [pos, setPos] = useState(50)
-  const [loaded, setLoaded] = useState({ left: false, right: false })
-  const [failed, setFailed] = useState(false)
+  // Which source each side has finished loading. Keyed by source rather than reset on
+  // change: a render the browser already holds (every operator's render of a frame is
+  // prefetched) fires its load event right after the source is set, and a reset that
+  // ran after it left the spinner on for good.
+  const [leftDone, setLeftDone] = useState(null)
+  const [rightDone, setRightDone] = useState(null)
+  const [failedSrc, setFailedSrc] = useState(null)
   const boxRef = useRef(null)
+  const leftRef = useRef(null)
+  const rightRef = useRef(null)
   const dragging = useRef(false)
 
+  // An image that was complete before its load handler could run still counts.
   useEffect(() => {
-    setLoaded({ left: false, right: false })
-    setFailed(false)
+    const check = (ref, src, setDone) => {
+      const img = ref.current
+      if (img && img.complete && img.naturalWidth > 0 && img.getAttribute('src') === src) setDone(src)
+    }
+    check(leftRef, leftSrc, setLeftDone)
+    check(rightRef, rightSrc, setRightDone)
   }, [leftSrc, rightSrc])
 
   const moveTo = (clientX) => {
@@ -94,7 +106,8 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
     setPos(Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100)))
   }
 
-  const ready = loaded.left && loaded.right
+  const ready = leftDone === leftSrc && rightDone === rightSrc
+  const failed = failedSrc === leftSrc || failedSrc === rightSrc
   // Both renders stay in the DOM so they load, but nothing of the comparison shows
   // until both are in: a half-loaded pair under a handle reads as a broken image.
   const imgStyle = {
@@ -152,18 +165,20 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
       }}
     >
       <img
+        ref={leftRef}
         src={leftSrc}
         alt={leftLabel}
         style={imgStyle}
-        onLoad={() => setLoaded((l) => ({ ...l, left: true }))}
-        onError={() => setFailed(true)}
+        onLoad={(e) => setLeftDone(e.currentTarget.getAttribute('src'))}
+        onError={(e) => setFailedSrc(e.currentTarget.getAttribute('src'))}
       />
       <img
+        ref={rightRef}
         src={rightSrc}
         alt={rightLabel}
         style={{ ...imgStyle, clipPath: `inset(0 0 0 ${pos}%)` }}
-        onLoad={() => setLoaded((l) => ({ ...l, right: true }))}
-        onError={() => setFailed(true)}
+        onLoad={(e) => setRightDone(e.currentTarget.getAttribute('src'))}
+        onError={(e) => setFailedSrc(e.currentTarget.getAttribute('src'))}
       />
       {ready && (
         <>
