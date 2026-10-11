@@ -138,6 +138,7 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
       sx={{
         position: 'relative',
         flex: 'none',
+        mx: fit ? 0 : 'auto',
         width: fit ? '100%' : width,
         height: fit ? 'auto' : height,
         aspectRatio: fit ? `${width} / ${height}` : undefined,
@@ -500,23 +501,28 @@ const TonemapCompareModal = ({
             {framesLoading && <CircularProgress size={14} sx={{ color: '#FFFFFF80' }} />}
             <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {[
-                ['frame', 'Full frame'],
-                ['crop', '1:1 crop'],
-              ].map(([id, label]) => (
-                <Button
-                  key={id}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setMode(id)}
-                  sx={{
-                    ...ghostBtnSx,
-                    px: 1.75,
-                    whiteSpace: 'nowrap',
-                    ...(mode === id && { color: '#4AA3FF', borderColor: '#4AA3FF', bgcolor: '#4AA3FF1A' }),
-                  }}
-                >
-                  {label}
-                </Button>
+                ['frame', 'Full frame', 'The whole frame, scaled down to fit'],
+                [
+                  'crop',
+                  'Actual size',
+                  'A 1280x720 piece from the centre of the frame at one image pixel per screen pixel, for fine detail',
+                ],
+              ].map(([id, label, hint]) => (
+                <Tooltip key={id} title={hint} placement="top">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setMode(id)}
+                    sx={{
+                      ...ghostBtnSx,
+                      px: 1.75,
+                      whiteSpace: 'nowrap',
+                      ...(mode === id && { color: '#4AA3FF', borderColor: '#4AA3FF', bgcolor: '#4AA3FF1A' }),
+                    }}
+                  >
+                    {label}
+                  </Button>
+                </Tooltip>
               ))}
             </Box>
           </Box>
