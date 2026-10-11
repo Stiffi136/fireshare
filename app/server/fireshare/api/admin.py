@@ -376,6 +376,7 @@ def get_admin_files():
             'is_hdr': bool(v.info.is_hdr) if v.info else False,
             'tonemap': v.info.tonemap_operator if v.info else None,
             'has_sdr': bool(v.info.has_sdr) if v.info else False,
+            'sdr_error': v.info.sdr_error if v.info else None,
             'has_password': bool(v.info.password_hash) if v.info else False,
             'available': v.available,
             'created_at': v.created_at.isoformat() if v.created_at else None,
