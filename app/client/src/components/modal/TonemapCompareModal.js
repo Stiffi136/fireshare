@@ -95,6 +95,8 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
   }
 
   const ready = loaded.left && loaded.right
+  // Both renders stay in the DOM so they load, but nothing of the comparison shows
+  // until both are in: a half-loaded pair under a handle reads as a broken image.
   const imgStyle = {
     position: 'absolute',
     inset: 0,
@@ -104,6 +106,7 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
     display: 'block',
     userSelect: 'none',
     pointerEvents: 'none',
+    visibility: ready ? 'visible' : 'hidden',
   }
 
   return (
@@ -161,46 +164,54 @@ const CompareSlider = ({ leftSrc, rightSrc, leftLabel, rightLabel, width, height
         onLoad={() => setLoaded((l) => ({ ...l, right: true }))}
         onError={() => setFailed(true)}
       />
-      <Box sx={{ ...cornerLabelSx, left: 10 }}>{leftLabel}</Box>
-      <Box sx={{ ...cornerLabelSx, right: 10 }}>{rightLabel}</Box>
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          bottom: 0,
-          left: `${pos}%`,
-          width: 2,
-          ml: '-1px',
-          bgcolor: '#4AA3FF',
-          pointerEvents: 'none',
-          boxShadow: '0 0 6px #000000AA',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '50%',
-          left: `${pos}%`,
-          transform: 'translate(-50%, -50%)',
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          bgcolor: '#061322',
-          border: '2px solid #4AA3FF',
-          color: '#4AA3FF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-          boxShadow: '0 2px 12px #000000AA',
-        }}
-      >
-        <ChevronLeftIcon sx={{ fontSize: 20, mr: -0.75 }} />
-        <ChevronRightIcon sx={{ fontSize: 20, ml: -0.75 }} />
-      </Box>
+      {ready && (
+        <>
+          <Box sx={{ ...cornerLabelSx, left: 10 }}>{leftLabel}</Box>
+          <Box sx={{ ...cornerLabelSx, right: 10 }}>{rightLabel}</Box>
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: `${pos}%`,
+              width: 2,
+              ml: '-1px',
+              bgcolor: '#4AA3FF',
+              pointerEvents: 'none',
+              boxShadow: '0 0 6px #000000AA',
+            }}
+          />
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: `${pos}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              bgcolor: '#061322',
+              border: '2px solid #4AA3FF',
+              color: '#4AA3FF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              boxShadow: '0 2px 12px #000000AA',
+            }}
+          >
+            <ChevronLeftIcon sx={{ fontSize: 20, mr: -0.75 }} />
+            <ChevronRightIcon sx={{ fontSize: 20, ml: -0.75 }} />
+          </Box>
+        </>
+      )}
       {!ready && !failed && (
-        <Box sx={overlaySx}>
-          <CircularProgress size={28} sx={{ color: '#FFFFFF99' }} />
+        <Box sx={{ ...overlaySx, bgcolor: '#0B1B2E', flexDirection: 'column', gap: 1.5 }}>
+          <CircularProgress size={32} sx={{ color: '#4AA3FF' }} />
+          <Typography sx={{ color: '#FFFFFFB3', fontSize: 13 }}>Loading the preview…</Typography>
+          <Typography sx={{ color: '#FFFFFF66', fontSize: 12 }}>
+            The first render of a frame takes the server a few seconds per operator.
+          </Typography>
         </Box>
       )}
       {failed && (
@@ -487,7 +498,7 @@ const TonemapCompareModal = ({
               />
             ))}
             {framesLoading && <CircularProgress size={14} sx={{ color: '#FFFFFF80' }} />}
-            <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
+            <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {[
                 ['frame', 'Full frame'],
                 ['crop', '1:1 crop'],
@@ -497,7 +508,12 @@ const TonemapCompareModal = ({
                   size="small"
                   variant="outlined"
                   onClick={() => setMode(id)}
-                  sx={{ ...ghostBtnSx, ...(mode === id && { color: '#4AA3FF', borderColor: '#4AA3FF' }) }}
+                  sx={{
+                    ...ghostBtnSx,
+                    px: 1.75,
+                    whiteSpace: 'nowrap',
+                    ...(mode === id && { color: '#4AA3FF', borderColor: '#4AA3FF', bgcolor: '#4AA3FF1A' }),
+                  }}
                 >
                   {label}
                 </Button>
