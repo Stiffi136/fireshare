@@ -23,7 +23,7 @@ import {
   useTheme,
 } from '@mui/material'
 import SnackbarAlert from '../components/alert/SnackbarAlert'
-import { TONEMAP_LABELS, deviceLabel } from '../components/modal/TonemapCompareModal'
+import { TONEMAP_LABELS, deviceLabel, OperatorInfo } from '../components/modal/TonemapCompareModal'
 import SaveIcon from '@mui/icons-material/Save'
 import SensorsIcon from '@mui/icons-material/Sensors'
 import RssFeedIcon from '@mui/icons-material/RssFeed'
@@ -1221,9 +1221,22 @@ const Settings = ({ isAdmin, currentUser, can = () => false }) => {
                           ))}
                         </NativeSelect>
                       </FormControl>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', mt: -1 }}>
-                        The operator used when an HDR video is converted to SDR. Auto picks bt.2390 on a GPU and hable
-                        otherwise. Each video can still be compared and changed from its editor.
+                      <Typography
+                        variant="caption"
+                        sx={{ color: 'text.secondary', mt: -1, display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        <span>
+                          The operator used when an HDR video is converted to SDR. Auto picks bt.2390 on a GPU and hable
+                          otherwise. Each video can still be compared and changed from its editor.
+                        </span>
+                        <OperatorInfo
+                          operator={
+                            updatedConfig.transcoding?.tonemap_default &&
+                            updatedConfig.transcoding.tonemap_default !== 'auto'
+                              ? updatedConfig.transcoding.tonemap_default
+                              : tonemapCaps?.auto_default
+                          }
+                        />
                       </Typography>
                       <FormControlLabel
                         control={
