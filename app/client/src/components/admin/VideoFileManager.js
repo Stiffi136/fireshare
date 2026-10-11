@@ -1020,20 +1020,10 @@ export default function VideoFileManager({ setAlert }) {
     )
   }
 
-  // Base columns: checkbox + name + size + visible data columns
-  // checkbox(1) + name(1) + size(1) + total_size(1) + duration(1) + resolution(1) + transcodes(1) + cropped(1) + privacy(1) + date(1) = 10
-  // minus hidden columns
-  const visibleDataCols = [
-    'Duration',
-    'Resolution',
-    'Transcodes',
-    'Cropped',
-    'Privacy',
-    'Password',
-    'Date',
-    'Total Size',
-  ].filter((c) => !hiddenColumns.has(c))
-  const COL_SPAN = 4 + visibleDataCols.length // checkbox + privacy spacer + name + size + visible toggleable cols
+  // Base columns: checkbox + privacy spacer + name + size, plus whichever toggleable columns are visible.
+  // Derived from TOGGLEABLE_COLUMNS so a new column cannot leave the folder rows one cell short.
+  const visibleDataCols = TOGGLEABLE_COLUMNS.filter((c) => !hiddenColumns.has(c))
+  const COL_SPAN = 4 + visibleDataCols.length
 
   const renamePreviewFiles = selectedFiles.slice(0, 3)
 
