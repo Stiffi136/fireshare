@@ -388,13 +388,15 @@ const TonemapCompareModal = ({
           outline: 'none',
         }}
       >
-        {/* Header */}
+        {/* Header: the close button is pinned top-right so the action buttons can wrap under the title on narrow windows */}
         <Box
           sx={{
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             gap: 2,
-            px: 2.5,
+            pl: 2.5,
+            pr: 7,
             py: 1.5,
             borderBottom: '1px solid #FFFFFF1F',
             flexWrap: 'wrap',
@@ -406,15 +408,29 @@ const TonemapCompareModal = ({
               {videoInfo?.title} · HDR · {width}x{height}
             </Typography>
           </Box>
-          <Button size="small" variant="outlined" onClick={loadFrames} disabled={framesLoading || busy} sx={ghostBtnSx}>
-            Reshuffle frames
-          </Button>
-          {getCurrentTime && (
-            <Button size="small" variant="outlined" onClick={addCurrentTime} disabled={busy} sx={ghostBtnSx}>
-              Add current time
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={loadFrames}
+              disabled={framesLoading || busy}
+              sx={ghostBtnSx}
+            >
+              Reshuffle frames
             </Button>
-          )}
-          <IconButton size="small" onClick={onClose} disabled={busy} sx={{ color: '#FFFFFFB3' }} aria-label="Close">
+            {getCurrentTime && (
+              <Button size="small" variant="outlined" onClick={addCurrentTime} disabled={busy} sx={ghostBtnSx}>
+                Add current time
+              </Button>
+            )}
+          </Box>
+          <IconButton
+            size="small"
+            onClick={onClose}
+            disabled={busy}
+            sx={{ position: 'absolute', top: 14, right: 12, color: '#FFFFFFB3' }}
+            aria-label="Close"
+          >
             <CloseIcon />
           </IconButton>
         </Box>
@@ -427,7 +443,7 @@ const TonemapCompareModal = ({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${Math.max(operators.length, 1)}, minmax(0, 1fr))`,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
               gap: 1,
             }}
             role="radiogroup"
@@ -473,16 +489,27 @@ const TonemapCompareModal = ({
                         background: checked ? 'radial-gradient(circle, #4AA3FF 45%, transparent 50%)' : 'none',
                       }}
                     />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {nameOf(op.id)}
                     </span>
                     <OperatorInfo operator={op.id} />
+                  </Box>
+                  {/* Badge, current tag and note share the second line, where there is room. */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                     <DeviceBadge op={op} />
                     {op.id === current && (
                       <Box
                         component="span"
                         sx={{
-                          ml: 'auto',
+                          flex: 'none',
                           fontSize: 10,
                           bgcolor: '#4AA3FF',
                           color: '#061322',
@@ -494,21 +521,23 @@ const TonemapCompareModal = ({
                         current
                       </Box>
                     )}
+                    <Typography
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 10.5,
+                        color: '#FFFFFFA6',
+                        fontFamily: 'monospace',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {op.available
+                        ? op.note || (op.device === 'gpu' ? 'runs on your GPU' : 'runs on the CPU')
+                        : op.note || 'not available'}
+                    </Typography>
                   </Box>
-                  <Typography
-                    sx={{
-                      fontSize: 10.5,
-                      color: '#FFFFFFA6',
-                      fontFamily: 'monospace',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {op.available
-                      ? op.note || (op.device === 'gpu' ? 'runs on your GPU' : 'runs on the CPU')
-                      : op.note || 'not available'}
-                  </Typography>
                 </Box>
               )
             })}
@@ -545,14 +574,10 @@ const TonemapCompareModal = ({
               />
             ))}
             {framesLoading && <CircularProgress size={14} sx={{ color: '#FFFFFF80' }} />}
-            <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ ml: 'auto', display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
               {[
-                ['frame', 'Full frame', 'The whole frame, scaled down to fit'],
-                [
-                  'crop',
-                  'Actual size',
-                  'A 1280x720 piece from the centre of the frame at one image pixel per screen pixel, for fine detail',
-                ],
+                ['frame', 'Full frame', 'The whole frame, scaled to fit'],
+                ['crop', 'Zoomed crop', 'A 1280x720 piece from the centre of the frame at full size, for fine detail'],
               ].map(([id, label, hint]) => (
                 <Tooltip key={id} title={hint} placement="top">
                   <Button
@@ -705,7 +730,7 @@ const TonemapCompareModal = ({
             variant="contained"
             disabled={!canApply}
             onClick={() => onApply(selected)}
-            sx={{ fontWeight: 600 }}
+            sx={{ ml: 0, fontWeight: 600 }}
           >
             {selected ? `Apply ${nameOf(selected)}` : 'Apply'}
           </Button>
@@ -715,7 +740,10 @@ const TonemapCompareModal = ({
   )
 }
 
+// The theme gives every small button a -8px left margin (meant for text buttons);
+// these sit in flex rows with gaps, so that margin is zeroed.
 const ghostBtnSx = {
+  ml: 0,
   color: '#fff',
   borderColor: '#FFFFFF33',
   textTransform: 'none',
@@ -724,6 +752,7 @@ const ghostBtnSx = {
 }
 
 const dangerBtnSx = {
+  ml: 0,
   color: '#F5A37C',
   borderColor: '#F0824A66',
   textTransform: 'none',

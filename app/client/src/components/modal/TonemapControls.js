@@ -4,6 +4,7 @@ import { VideoService } from '../../services'
 import TonemapCompareModal, { TONEMAP_LABELS, DeviceBadge, deviceLabel, OperatorInfo } from './TonemapCompareModal'
 
 const btnSx = {
+  ml: 0, // the theme's small-button -8px margin would eat the row's gap
   fontSize: 12,
   textTransform: 'none',
   color: '#fff',
