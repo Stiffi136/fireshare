@@ -11,7 +11,7 @@ import { rememberSourceChoice } from '../../common/utils'
 const SEEK_TOLERANCE_SECONDS = 0.5
 
 // Playback steps down to a lower quality once it has spent this long buffering (in ms)...
-const BUFFER_STALL_TIMEOUT_MS = 5000
+const BUFFER_STALL_TIMEOUT_MS = 7000
 
 // ...within this window, in one stall or several short ones (in ms)
 const BUFFER_STALL_WINDOW_MS = 30000
