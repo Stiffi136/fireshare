@@ -167,8 +167,12 @@ function PlayerEffects({ sources, onSourceChange, onTimeUpdate, onReady, startTi
 
     const switchToNextSource = () => {
       onSourceChange((prev) => {
-        if (prev + 1 < sources.length) return prev + 1
-        return prev
+        // A stall calls for a smaller file. A tone-mapped video lists its source twice,
+        // as the SDR copy and the HDR original, and those are the same size, so when
+        // one of them stalls the other is passed over for the first transcode.
+        let next = prev + 1
+        while (next < sources.length && sources[prev]?.variant && sources[next]?.variant) next += 1
+        return next < sources.length ? next : prev
       })
     }
 
