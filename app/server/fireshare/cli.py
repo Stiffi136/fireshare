@@ -506,11 +506,7 @@ def scan_videos(root):
         db.session.commit()
 
         # Generate metadata and posters for new videos, then fire webhooks
-        thumbnail_skip = current_app.config['THUMBNAIL_VIDEO_LOCATION'] or 0
-        if thumbnail_skip > 0 and thumbnail_skip <= 100:
-            thumbnail_skip = thumbnail_skip / 100
-        else:
-            thumbnail_skip = 0
+        thumbnail_skip = util.thumbnail_skip_fraction(current_app.config['THUMBNAIL_VIDEO_LOCATION'])
         processed_root = Path(current_app.config['PROCESSED_DIRECTORY'])
         for nv in new_videos:
             video_link_path = video_links / (nv.video_id + nv.extension)
@@ -537,9 +533,8 @@ def scan_videos(root):
             if not poster_path.exists():
                 if not derived_path.exists():
                     derived_path.mkdir(parents=True)
-                duration = nv_info.duration if nv_info else 0
-                poster_time = int((duration or 0) * thumbnail_skip)
-                util.create_poster(video_link_path, poster_path, poster_time)
+                source_path, source_duration = util.playback_source(nv_info, processed_root) if nv_info else (video_link_path, 0)
+                util.create_poster(source_path, poster_path, int(source_duration * thumbnail_skip))
             poster_ready = poster_path.exists() and poster_path.stat().st_size > 0
             if not poster_ready:
                 logger.warning(f"Skipping webhook for {nv.video_id}: poster not ready")
@@ -634,11 +629,7 @@ def scan_video(ctx, path, tag_ids, game_id, title, uploaded_by):
         domain = current_app.config['DOMAIN']
         videos_path = paths["video"]
         video_links = paths["processed"] / "video_links"
-        thumbnail_skip = current_app.config['THUMBNAIL_VIDEO_LOCATION'] or 0
-        if thumbnail_skip > 0 and thumbnail_skip <= 100:
-            thumbnail_skip = thumbnail_skip / 100
-        else:
-            thumbnail_skip = 0
+        thumbnail_skip = util.thumbnail_skip_fraction(current_app.config['THUMBNAIL_VIDEO_LOCATION'])
         
         config_file = open(paths["data"] / "config.json")
         config = json.load(config_file)
@@ -762,14 +753,13 @@ def scan_video(ctx, path, tag_ids, game_id, title, uploaded_by):
                 derived_path = Path(processed_root, "derived", info.video_id)
                 video_path = Path(processed_root, "video_links", info.video_id + video_file.suffix)
                 if video_path.exists():
-                    
+                    source_path, source_duration = util.playback_source(info, processed_root)
                     poster_path = Path(derived_path, "poster.jpg")
                     should_create_poster = not poster_path.exists()
                     if should_create_poster:
                         if not derived_path.exists():
                             derived_path.mkdir(parents=True)
-                        poster_time = int((info.duration or 0) * thumbnail_skip)
-                        poster_ok = util.create_poster(video_path, derived_path / "poster.jpg", poster_time)
+                        poster_ok = util.create_poster(source_path, derived_path / "poster.jpg", int(source_duration * thumbnail_skip))
                         if not poster_ok:
                             logger.warning(f"Could not generate poster for video {info.video_id}")
                     else:
@@ -779,7 +769,7 @@ def scan_video(ctx, path, tag_ids, game_id, title, uploaded_by):
                     if tag_ids:
                         boomerang_path = derived_path / "boomerang-preview.mp4"
                         if not boomerang_path.exists():
-                            util.create_boomerang_preview(video_path, boomerang_path)
+                            util.create_boomerang_preview(source_path, boomerang_path)
 
                     poster_ready = poster_path.exists() and poster_path.stat().st_size > 0
                     if discord_webhook_url and poster_ready:
@@ -964,8 +954,8 @@ def create_posters(regenerate, skip):
             if should_create_poster:
                 if not derived_path.exists():
                     derived_path.mkdir(parents=True)
-                poster_time = int((vi.duration or 0) * skip)
-                util.create_poster(video_path, derived_path / "poster.jpg", poster_time)
+                source_path, source_duration = util.playback_source(vi, processed_root)
+                util.create_poster(source_path, derived_path / "poster.jpg", int(source_duration * skip))
             else:
                 logger.debug(f"Skipping creation of poster for video {vi.video_id} because it exists at {str(poster_path)}")
 
@@ -991,7 +981,7 @@ def create_boomerang_posters(regenerate):
             if should_create_poster:
                 if not derived_path.exists():
                     derived_path.mkdir(parents=True)
-                util.create_boomerang_preview(video_path, poster_path)
+                util.create_boomerang_preview(util.playback_source(vi, processed_root)[0], poster_path)
             else:
                 logger.debug(f"Skipping creation of boomerang poster for video {vi.video_id} because it already exists")
 
@@ -1069,6 +1059,7 @@ def transcode_videos(regenerate, video, include_corrupt):
             # server that lacked the filters at the time), and, with automatic tone
             # mapping on, any HDR video nothing has been chosen for yet.
             auto_tonemap = transcoding_config.get('auto_tonemap', False)
+            thumbnail_skip = util.thumbnail_skip_fraction(current_app.config['THUMBNAIL_VIDEO_LOCATION'])
             tonemap_default = None
             if auto_tonemap:
                 tonemap_default = util.resolve_tonemap_default(transcoding_config.get('tonemap_default', 'auto'))
@@ -1128,6 +1119,13 @@ def transcode_videos(regenerate, video, include_corrupt):
                             if transcode_path.exists():
                                 transcode_path.unlink()
                             setattr(vi, f'has_{height}p', False)
+                        # The poster and hover preview were taken from the HDR source;
+                        # retake them from the copy that now plays.
+                        source_path, source_duration = util.playback_source(vi, processed_root)
+                        util.create_poster(source_path, derived_path / "poster.jpg", int(source_duration * thumbnail_skip))
+                        boomerang_path = derived_path / "boomerang-preview.mp4"
+                        if boomerang_path.exists():
+                            util.create_boomerang_preview(source_path, boomerang_path)
                     else:
                         vi.sdr_error = util.sdr_failure_message(failure_reason)
                         logger.warning(f"SDR copy of {vi.video_id} failed: {vi.sdr_error}")
@@ -1309,11 +1307,7 @@ def bulk_import(ctx, root):
             return
         util.create_lock(paths["data"])
 
-        thumbnail_skip = current_app.config['THUMBNAIL_VIDEO_LOCATION'] or 0
-        if thumbnail_skip > 0 and thumbnail_skip <= 100:
-            thumbnail_skip = thumbnail_skip / 100
-        else:
-            thumbnail_skip = 0
+        thumbnail_skip = util.thumbnail_skip_fraction(current_app.config['THUMBNAIL_VIDEO_LOCATION'])
 
         timing = {}
         s = time.time()

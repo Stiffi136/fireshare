@@ -520,6 +520,35 @@ def create_audio_extract(source_path, out_path):
     return result == 0
 
 
+def thumbnail_skip_fraction(setting):
+    """THUMBNAIL_VIDEO_LOCATION as a fraction of the duration: a percentage from 1 to 100, else 0."""
+    skip = setting or 0
+    return skip / 100 if 0 < skip <= 100 else 0
+
+
+def playback_source(video_info, processed_root):
+    """The file a video plays from, and its length in seconds.
+
+    The SDR copy where one exists, else the crop, else the original. Posters and hover
+    previews are taken from this, so a tone-mapped or cropped video's thumbnail shows
+    what plays rather than the washed-out HDR source or the uncut file.
+    """
+    processed_root = Path(processed_root)
+    video_id = video_info.video_id
+    derived = processed_root / "derived" / video_id
+    path = processed_root / "video_links" / f"{video_id}{video_info.video.extension}"
+    duration = video_info.duration or 0
+    cropped = derived / f"{video_id}-cropped.mp4"
+    if video_info.has_crop and cropped.exists():
+        path = cropped
+        end = video_info.end_time if video_info.end_time is not None else duration
+        duration = max(end - (video_info.start_time or 0), 0)
+    sdr = derived / f"{video_id}-sdr.mp4"
+    if video_info.has_sdr and sdr.exists():
+        path = sdr  # cut from the crop when there is one, so the length stands
+    return path, duration
+
+
 def create_poster(video_path, out_path, second=0):
     s = time.time()
     out_path = Path(out_path)

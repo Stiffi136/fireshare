@@ -241,10 +241,13 @@ def _rebuild_derived_async(video, paths, heights, start_time=None, end_time=None
                     logger.error(f"SDR copy of {video_id} failed: {vi.sdr_error}")
                 db.session.commit()
 
-        # Regenerate thumbnail from whichever file now plays
+        # Regenerate the thumbnail, and the hover preview if there is one, from whichever file now plays
         if not still_current():
             return
         util.create_poster(source_path, derived_dir / "poster.jpg", int(source_duration * thumbnail_skip))
+        boomerang_path = derived_dir / "boomerang-preview.mp4"
+        if boomerang_path.exists():
+            util.create_boomerang_preview(source_path, boomerang_path)
 
         for height in heights:
             if not still_current():
