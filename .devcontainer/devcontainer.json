@@ -1,0 +1,9 @@
+{
+	"name": "Fireshare Development",
+	"build": {
+		"context": "..",
+		"dockerfile": "Dockerfile"
+	},
+	"forwardPorts": [3000, 3001],
+	"postCreateCommand": "cd app/client && npm ci"
+}

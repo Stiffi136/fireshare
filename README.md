@@ -176,6 +176,10 @@ docker run --name fireshare \
 
 Open `http://localhost:8080`.
 
+### Building an image from your fork
+
+To build and publish the standard Docker image from your own fork to GHCR, see [Custom Docker image deployment](./docs/CustomDockerImage.md). The guide covers release tags, image references, updates, rollback, and private package authentication.
+
 ### Fireshare Lite
 
 The `fireshare:latest-lite` image is a smaller alternative that uses the system-provided FFmpeg instead of the CUDA-enabled build included in the standard image. It is a good fit for most users who do not need GPU transcoding.

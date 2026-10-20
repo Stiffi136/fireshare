@@ -15,6 +15,27 @@ const BUFFER_STALL_TIMEOUT_MS = 7000
 
 // ...within this window, in one stall or several short ones (in ms)
 const BUFFER_STALL_WINDOW_MS = 30000
+const VOLUME_STORAGE_KEY = 'fireshare.player.volume'
+
+function readSavedVolume() {
+  try {
+    const value = window.localStorage.getItem(VOLUME_STORAGE_KEY)
+    if (value === null || value.trim() === '') return null
+    const volume = Number(value)
+    return Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : null
+  } catch {
+    return null
+  }
+}
+
+function saveVolume(volume) {
+  if (!Number.isFinite(volume) || volume < 0 || volume > 1) return
+  try {
+    window.localStorage.setItem(VOLUME_STORAGE_KEY, String(volume))
+  } catch {
+    // Storage can be disabled or unavailable in private browsing contexts.
+  }
+}
 
 // Create the Video.js 10 player instance (module-level singleton)
 const Player = createPlayer({ features: videoFeatures })
@@ -38,6 +59,20 @@ function PlayerEffects({ sources, onSourceChange, onTimeUpdate, onReady, startTi
       onTimeUpdateRef.current({ playedSeconds: currentTime || 0 })
     }
   }, [currentTime])
+
+  // Restore volume on each newly mounted media element and persist native
+  // player changes. Muted is deliberately left alone so the player's existing
+  // mute state and controls remain authoritative.
+  useEffect(() => {
+    if (!media) return
+    const savedVolume = readSavedVolume()
+    if (savedVolume !== null && media.volume !== savedVolume) {
+      media.volume = savedVolume
+    }
+    const handleVolumeChange = () => saveVolume(media.volume)
+    media.addEventListener('volumechange', handleVolumeChange)
+    return () => media.removeEventListener('volumechange', handleVolumeChange)
+  }, [media])
 
   // --- onReady: provide a wrapper that mimics the v8 player API --------------
   const mediaRef = useRef(null)
