@@ -21,7 +21,7 @@ env:
 
 jobs:
   publish:
-    name: Build and publish standard image
+    name: Build and publish Lite image
     runs-on: ubuntu-latest
     steps:
       - name: Validate version tag
@@ -52,6 +52,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          flavor: |
+            suffix=-lite
           tags: |
             type=semver,pattern={{version}},value=${{ env.IMAGE_TAG }}
             type=raw,value=latest,enable=${{ github.event_name == 'push' }}
@@ -60,7 +62,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.lite
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
